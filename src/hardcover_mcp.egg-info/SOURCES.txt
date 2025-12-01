@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/hardcover_mcp/hardcover_client.py
+src/hardcover_mcp/main.py
+src/hardcover_mcp.egg-info/PKG-INFO
+src/hardcover_mcp.egg-info/SOURCES.txt
+src/hardcover_mcp.egg-info/dependency_links.txt
+src/hardcover_mcp.egg-info/requires.txt
+src/hardcover_mcp.egg-info/top_level.txt
+src/hardcover_mcp/server/books.py

@@ -1,0 +1,30 @@
+[project]
+name = "hardcover-mcp"
+version = "0.1.0"
+description = "Hardcover MCP server for the Hardcover.app GraphQL API"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "ruff",
+    "mypy",
+    "mcp",
+    "mcp[cli]"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+
+[tool.mypy]
+python_version = "3.11"
