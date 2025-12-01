@@ -1,0 +1,9 @@
+fastmcp
+
+[dev]
+pytest
+black
+ruff
+mypy
+mcp
+mcp[cli]
