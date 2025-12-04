@@ -18,7 +18,7 @@ BOOKS_BY_ID_QUERY = """
 """
 
 BOOKS_BY_TITLE_QUERY = """
-    query BookByTitle($title: String!) {
+    query BookByTitle($title: String!, $tagging_count_minimum: Int!) {
       books(where: {title: {_eq: $title}}) {
         title
         release_year
@@ -32,11 +32,17 @@ BOOKS_BY_TITLE_QUERY = """
         }
         description
         users_read_count
-        taggings {
+        taggings(
+          where: {
+            tag: {
+              count: { _gt: $tagging_count_minimum }
+            }
+          }
+        ) {
           tag {
             tag
             tag_category {
-              slug
+                category 
             }
           }
         }
@@ -45,7 +51,7 @@ BOOKS_BY_TITLE_QUERY = """
 """
 
 BOOKS_BY_GENRE_QUERY = """
-    query BookByGenre($genre: [String!], $rating_minimum: Int!, $limit: Int!, $offset: Int!) {
+    query BookByGenre($genre: [String!], $rating_minimum: Int!, $tagging_count_minimum: Int!, $limit: Int!, $offset: Int!) {
       books(
         where: {taggings: {tag: {tag: {_in: $genre}}}, _and: {ratings_count: {_gte: $rating_minimum}}}
         order_by: {release_year: desc_nulls_first}
@@ -67,7 +73,7 @@ BOOKS_BY_GENRE_QUERY = """
         taggings(
           where: {
             tag: {
-              count: { _gt: 5000 }
+              count: { _gt: $tagging_count_minimum }
             }
           }
         ) {

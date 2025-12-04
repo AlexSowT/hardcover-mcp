@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@upstash/context7-mcp": "^1.0.31"
+  }
+}
