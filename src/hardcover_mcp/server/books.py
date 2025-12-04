@@ -57,7 +57,15 @@ def parse_book_response(book_data) -> list[Book]:
     return parsed
 
 
-@mcp.tool
+@mcp.tool(
+    description="""Search the Hardcover database to get a book by hardcover book ID. 
+                    Returns infomation such as name, author, descirpitob, reviews, and the mood and genre of the book.
+                    Important: This tool should only be used with a Hardcover ID.""",
+    tags={"books", "search"},
+    annotations={"title": "Search books by Title", "readOnlyHint": True},
+    enabled=False
+
+)
 async def get_book_by_id(id: int, ctx: Context) -> list[Book]:
     if not isinstance(id, int) or id < 1:
         raise TypeError(f"Book ID must be a positive integer. id: {id}")
@@ -74,12 +82,12 @@ async def get_book_by_id(id: int, ctx: Context) -> list[Book]:
     tags={"books", "search"},
     annotations={"title": "Search books by Title", "readOnlyHint": True},
 )
-async def get_books_by_title(title: str, ctx: Context):
+async def get_books_by_title(title: str, ctx: Context, tagging_count_minimum: int = 5000):
     if not isinstance(title, str) or not title.strip():
         raise TypeError("Title must be a non-empty string")
 
     result = await _client.query(
-        BOOKS_BY_TITLE_QUERY, variables={"title": title}, ctx=ctx
+            BOOKS_BY_TITLE_QUERY, variables={"title": title, "tagging_count_minimum": tagging_count_minimum}, ctx=ctx
     )
     book_data = result["books"]
 
@@ -101,6 +109,7 @@ async def get_books_by_genre(
     rating_minimum: int = 50,
     limit: int = 5,
     offset: int = 0,
+    tagging_count_minimum: int = 5000,
     ctx: Context = None,
 ):
     # if not isinstance(genre, str) or not genre.strip():
@@ -113,6 +122,7 @@ async def get_books_by_genre(
             "rating_minimum": rating_minimum,
             "limit": limit,
             "offset": offset,
+            "tagging_count_minimum": tagging_count_minimum
         },
         ctx=ctx,
     )
