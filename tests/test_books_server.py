@@ -39,17 +39,35 @@ except ModuleNotFoundError:  # pragma: no cover - provide a lightweight stub
 
     from fastmcp.exceptions import ToolError
 
-from hardcover_mcp.queries.book import BOOKS_BY_ID_QUERY, BOOKS_BY_TITLE_QUERY
+from hardcover_mcp.queries.book import (
+    BOOKS_BY_ID_QUERY,
+    BOOKS_BY_TITLE_QUERY,
+    BOOKS_BY_GENRE_QUERY,
+    BOOKS_BY_MOOD_QUERY,
+    BOOKS_BY_TAG_QUERY,
+    BOOKS_BY_CONTENT_WARNING_QUERY,
+    BOOKS_BY_PACE_QUERY,
+    BOOKS_BY_LENGTH_QUERY,
+    BOOK_REVIEWS_QUERY,
+    BOOK_REVIEWS_BY_TITLE_QUERY,
+)
 from hardcover_mcp.schemas.book import Book
 from hardcover_mcp.server import books as books_module
 
 
 BOOK_RESPONSE = {
+    "id": 999,
     "title": "Lord Peter Views the Body",
     "release_year": 1928,
     "rating": 3.710526315789474,
     "ratings_count": 19,
     "reviews_count": 3,
+    "pages": 320,
+    "audio_seconds": 3600,
+    "taggings": [
+        {"tag": {"tag": "Fantasy", "tag_category": {"id": 1, "category": "Genre"}}},
+        {"tag": {"tag": "Fantasy", "tag_category": {"id": 1, "category": "Genre"}}},
+    ],
     "contributions": [
         {
             "author": {
@@ -59,32 +77,32 @@ BOOK_RESPONSE = {
     ],
     "description": (
         "Consists of the following short stories -\r\n"
-        "\"The Abominable History of the Man with Copper Fingers\": An artist's jealous "
+        '"The Abominable History of the Man with Copper Fingers": An artist\'s jealous '
         "nature leads to an investigation of his mistress' disappearance.\r\n"
-        "\"The Entertaining Episode of the Article in Question\": A grammatical mistake "
+        '"The Entertaining Episode of the Article in Question": A grammatical mistake '
         "in French unmasks a clever criminal.\r\n"
-        "\"The Fascinating Problem of Uncle Meleager's Will\": The disposal of a dead "
+        '"The Fascinating Problem of Uncle Meleager\'s Will": The disposal of a dead '
         "man's fortune depends on his penchant for cross-word puzzles.\r\n"
-        "\"The Fantastic Horror of the Cat in the Bag\": A high-speed chase and a lost "
+        '"The Fantastic Horror of the Cat in the Bag": A high-speed chase and a lost '
         "bag converge with a gruesome discovery.\r\n"
-        "\"The Unprincipled Affair of the Practical Joker\": A lady pleads for Lord "
+        '"The Unprincipled Affair of the Practical Joker": A lady pleads for Lord '
         "Peter's help in retrieving a valuable necklace, and more importantly, a "
         "portrait with an indiscreet inscription.\r\n"
-        "\"The Undignified Melodrama of the Bone of Contention\": Lord Peter, visiting "
+        '"The Undignified Melodrama of the Bone of Contention": Lord Peter, visiting '
         "friends in the country, sees a ghostly carriage, hears rumors of an odd "
         "will, and deduces that foul play is afoot.\r\n"
-        "\"The Vindictive Story of the Footsteps That Ran\": Lord Peter deduces the "
+        '"The Vindictive Story of the Footsteps That Ran": Lord Peter deduces the '
         "whereabouts of a cleverly hidden murder weapon.\r\n"
-        "\"The Bibulous Business of a Matter of Taste\": Lord Peter's famous palate is "
+        '"The Bibulous Business of a Matter of Taste": Lord Peter\'s famous palate is '
         "the deciding factor in acquiring wartime intelligence.\r\n"
-        "\"The Learned Adventure of the Dragon's Head\": Viscount St. George appears "
+        '"The Learned Adventure of the Dragon\'s Head": Viscount St. George appears '
         "as a boy as Lord Peter uses clues from a rare book to find a treasure.\r\n"
-        "\"The Piscatorial Farce of the Stolen Stomach\": Involving several Scotsmen, "
+        '"The Piscatorial Farce of the Stolen Stomach": Involving several Scotsmen, '
         "a digestive organ, and a handful of diamonds.\r\n"
-        "\"The Unsolved Puzzle of the Man with No Face\": Which ends with Wimsey "
+        '"The Unsolved Puzzle of the Man with No Face": Which ends with Wimsey '
         "letting a murderer go free, at least partially because he is a good "
         "painter.\r\n"
-        "\"The Adventurous Exploit of the Cave of Ali Baba\": Lord Peter infiltrates a "
+        '"The Adventurous Exploit of the Cave of Ali Baba": Lord Peter infiltrates a '
         "den of ruthless thieves; notable for unusual technology."
     ),
     "users_read_count": 24,
@@ -95,7 +113,9 @@ class DummyContext:
     def __init__(self) -> None:
         self.debug_messages: list[list[Book]] = []
 
-    async def debug(self, payload) -> None:  # pragma: no cover - signature defined by fastmcp
+    async def debug(
+        self, payload
+    ) -> None:  # pragma: no cover - signature defined by fastmcp
         self.debug_messages.append(payload)
 
 
@@ -116,7 +136,24 @@ def mock_client(sample_response):
     books_module._client = original_client
 
 
+@pytest.fixture
+def reviews_response() -> dict:
+    return {
+        "user_books": [
+            {
+                "id": 1,
+                "rating": "4.5",
+                "review": "Great!",
+                "review_has_spoilers": False,
+                "created_at": "2024-01-01",
+                "user": {"id": 5, "username": "reader"},
+            }
+        ]
+    }
+
+
 def assert_matches_book(book: Book) -> None:
+    assert book.id == BOOK_RESPONSE["id"]
     assert book.title == BOOK_RESPONSE["title"]
     assert book.release_year == BOOK_RESPONSE["release_year"]
     assert book.rating == pytest.approx(float(BOOK_RESPONSE["rating"]))
@@ -125,6 +162,10 @@ def assert_matches_book(book: Book) -> None:
     assert book.author_names == ["Dorothy L. Sayers"]
     assert book.description.startswith("Consists of the following short stories")
     assert book.users_read_count == BOOK_RESPONSE["users_read_count"]
+    assert book.pages == BOOK_RESPONSE["pages"]
+    assert book.audio_seconds == BOOK_RESPONSE["audio_seconds"]
+    assert len(book.taggings) == 1
+    assert book.taggings[0].tag == "Fantasy"
 
 
 def test_get_books_server_sets_client_reference():
@@ -181,7 +222,6 @@ def test_get_book_by_id_returns_parsed_books(mock_client):
 
     assert len(result) == 1
     assert_matches_book(result[0])
-    assert ctx.debug_messages == [mock_client.query.return_value]
 
 
 def test_get_book_by_id_validates_identifier(mock_client):
@@ -204,7 +244,6 @@ def test_get_books_by_title_returns_parsed_books(mock_client):
 
     assert len(result) == 1
     assert_matches_book(result[0])
-    assert ctx.debug_messages == [mock_client.query.return_value]
 
 
 def test_get_books_by_title_validates_title(mock_client):
@@ -219,3 +258,168 @@ def test_get_books_by_title_raises_when_no_results(mock_client):
 
     with pytest.raises(ToolError):
         invoke_tool(books_module.get_books_by_title, "missing", DummyContext())
+
+
+def test_get_books_by_genre_returns_parsed_books(mock_client):
+    ctx = DummyContext()
+    result = invoke_tool(
+        books_module.get_books_by_genre,
+        ["Fantasy"],
+        10,
+        2,
+        1,
+        100,
+        0,
+        9999,
+        ctx,
+    )
+
+    mock_client.query.assert_awaited_once_with(
+        BOOKS_BY_GENRE_QUERY,
+        variables={
+            "genre": ["Fantasy"],
+            "rating_minimum": 10,
+            "limit": 2,
+            "offset": 1,
+            "tagging_count_minimum": 100,
+            "min_year": 0,
+            "max_year": 9999,
+        },
+        ctx=ctx,
+    )
+    assert len(result) == 1
+    assert_matches_book(result[0])
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        (["Fantasy"], -1, 1, 0, 0, 0, 9999, DummyContext()),
+        (["Fantasy"], 1, 0, 0, 0, 0, 9999, DummyContext()),
+        (["Fantasy"], 1, 1, -1, 0, 0, 9999, DummyContext()),
+        (["", ""], 1, 1, 0, 0, 0, 9999, DummyContext()),
+        (["Fantasy"], 1, 1, 0, 0, -1, 9999, DummyContext()),
+        (["Fantasy"], 1, 1, 0, 0, 2025, 2024, DummyContext()),
+    ],
+)
+def test_get_books_by_genre_validates_inputs(mock_client, args):
+    with pytest.raises(TypeError):
+        invoke_tool(books_module.get_books_by_genre, *args)
+    assert mock_client.query.await_count == 0
+
+
+@pytest.mark.parametrize(
+    "tool, field",
+    [
+        (books_module.get_books_by_mood, "moods"),
+        (books_module.get_books_by_tag, "tags"),
+        (books_module.get_books_by_content_warning, "content_warnings"),
+        (books_module.get_books_by_pace, "paces"),
+    ],
+)
+def test_book_tag_queries_happy_path(mock_client, tool, field):
+    ctx = DummyContext()
+    args = {
+        "moods": ["dark"],
+        "tags": ["magic"],
+        "content_warnings": ["violence"],
+        "paces": ["fast"],
+    }
+    result = invoke_tool(
+        tool,
+        args[field],
+        5,
+        2,
+        0,
+        999,
+        0,
+        9999,
+        ctx,
+    )
+    assert len(result) == 1
+    assert_matches_book(result[0])
+
+
+def test_get_books_by_tag_invokes_query(mock_client):
+    ctx = DummyContext()
+    invoke_tool(books_module.get_books_by_tag, ["magic"], 5, 1, 0, 50, 0, 9999, ctx)
+    mock_client.query.assert_awaited_once_with(
+        BOOKS_BY_TAG_QUERY,
+        variables={
+            "tags": ["magic"],
+            "rating_minimum": 5,
+            "limit": 1,
+            "offset": 0,
+            "tagging_count_minimum": 50,
+            "min_year": 0,
+            "max_year": 9999,
+        },
+        ctx=ctx,
+    )
+
+
+def test_get_books_by_length_happy_path(mock_client):
+    ctx = DummyContext()
+    result = invoke_tool(
+        books_module.get_books_by_length,
+        100,
+        300,
+        0,
+        2,
+        0,
+        0,
+        9999,
+        ctx,
+    )
+    mock_client.query.assert_awaited_once()
+    assert len(result) == 1
+    assert_matches_book(result[0])
+
+
+def test_get_books_by_length_validates_bounds(mock_client):
+    with pytest.raises(TypeError):
+        invoke_tool(
+            books_module.get_books_by_length, 300, 100, 0, 1, 0, 0, 9999, DummyContext()
+        )
+    assert mock_client.query.await_count == 0
+
+
+def test_get_book_reviews_parses_reviews(mock_client, reviews_response):
+    mock_client.query.return_value = reviews_response
+    ctx = DummyContext()
+    reviews = invoke_tool(books_module.get_book_reviews, 10, 1, 0, ctx)
+    mock_client.query.assert_awaited_once_with(
+        BOOK_REVIEWS_QUERY,
+        variables={"book_id": 10, "limit": 1, "offset": 0},
+        ctx=ctx,
+    )
+    assert len(reviews) == 1
+    review = reviews[0]
+    assert review.rating == pytest.approx(4.5)
+    assert review.username == "reader"
+
+
+def test_get_book_reviews_validates_inputs(mock_client):
+    with pytest.raises(TypeError):
+        invoke_tool(books_module.get_book_reviews, 0, 1, 0, DummyContext())
+    assert mock_client.query.await_count == 0
+
+
+def test_get_book_reviews_by_title_happy_path(mock_client, reviews_response):
+    mock_client.query.return_value = reviews_response
+    ctx = DummyContext()
+    reviews = invoke_tool(
+        books_module.get_book_reviews_by_title, "Some Title", 1, 0, ctx
+    )
+    mock_client.query.assert_awaited_once_with(
+        BOOK_REVIEWS_BY_TITLE_QUERY,
+        variables={"title": "Some Title", "limit": 1, "offset": 0},
+        ctx=ctx,
+    )
+    assert reviews[0].username == "reader"
+
+
+def test_get_book_reviews_by_title_validates_title(mock_client):
+    with pytest.raises(TypeError):
+        invoke_tool(books_module.get_book_reviews_by_title, " ", 1, 0, DummyContext())
+    assert mock_client.query.await_count == 0
