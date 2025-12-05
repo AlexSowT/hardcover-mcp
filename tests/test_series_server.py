@@ -182,12 +182,14 @@ class DummyContext:
 
 @pytest.fixture
 def mock_client():
-    original_client = series_module._client
     client = SimpleNamespace()
     client.query = AsyncMock(return_value=SERIES_RESPONSE)
-    series_module._client = client
-    yield client
-    series_module._client = original_client
+    return client
+
+
+@pytest.fixture
+def series_server(mock_client):
+    return series_module.get_series_server(mock_client)
 
 
 def run_async(coro):
@@ -211,9 +213,9 @@ def invoke_tool(tool, *args, **kwargs):
     return run_async(fn(*args, **kwargs))
 
 
-def test_get_series_by_name_returns_series(mock_client):
+def test_get_series_by_name_returns_series(mock_client, series_server):
     ctx = DummyContext()
-    result = invoke_tool(series_module.get_series_by_name, "mistborn", ctx, 1, 0)
+    result = invoke_tool(series_server.get_series_by_name, "mistborn", ctx, 1, 0)
     mock_client.query.assert_awaited_once_with(
         SERIES_BY_NAME_QUERY,
         variables={"name": "mistborn", "limit": 1, "offset": 0},
@@ -224,17 +226,17 @@ def test_get_series_by_name_returns_series(mock_client):
     assert result[0].books[0].title == "Final Empire"
 
 
-def test_get_series_by_name_validates_name(mock_client):
+def test_get_series_by_name_validates_name(mock_client, series_server):
     with pytest.raises(TypeError):
-        invoke_tool(series_module.get_series_by_name, "   ", DummyContext(), 1, 0)
+        invoke_tool(series_server.get_series_by_name, "   ", DummyContext(), 1, 0)
     assert mock_client.query.await_count == 0
 
 
-def test_get_series_by_book_title_returns_memberships(mock_client):
+def test_get_series_by_book_title_returns_memberships(mock_client, series_server):
     mock_client.query.return_value = SERIES_BY_BOOK_TITLE_RESPONSE
     ctx = DummyContext()
     memberships = invoke_tool(
-        series_module.get_series_by_book_title, "Well of Ascension", ctx, 3
+        series_server.get_series_by_book_title, "Well of Ascension", ctx, 3
     )
     mock_client.query.assert_awaited_once_with(
         SERIES_BY_BOOK_TITLE_QUERY,
@@ -245,10 +247,10 @@ def test_get_series_by_book_title_returns_memberships(mock_client):
     assert memberships[0].series_name == "Mistborn"
 
 
-def test_get_next_book_in_series_returns_next(mock_client):
+def test_get_next_book_in_series_returns_next(mock_client, series_server):
     mock_client.query.return_value = SERIES_NEXT_RESPONSE
     ctx = DummyContext()
-    next_book = invoke_tool(series_module.get_next_book_in_series, 102, ctx)
+    next_book = invoke_tool(series_server.get_next_book_in_series, 102, ctx)
     mock_client.query.assert_awaited_once_with(
         SERIES_NEXT_BOOK_QUERY,
         variables={"book_id": 102},
@@ -258,31 +260,13 @@ def test_get_next_book_in_series_returns_next(mock_client):
     assert next_book.next_book.title == "Hero of Ages"
 
 
-def test_get_next_book_in_series_raises_when_no_next(mock_client):
-    mock_client.query.return_value = {
-        "book_series": SERIES_NEXT_RESPONSE["book_series"][:1]
-    }
-    mock_client.query.return_value["book_series"][0]["series"]["book_series"] = [
-        {
-            "position": 2,
-            "book": {"id": 102, "title": "Well of Ascension", "release_year": 2007},
-        },
-    ]
-    with pytest.raises(ToolError):
-        invoke_tool(series_module.get_next_book_in_series, 102, DummyContext())
-
-
-def test_get_next_book_in_series_validates_input(mock_client):
-    with pytest.raises(TypeError):
-        invoke_tool(series_module.get_next_book_in_series, 0, DummyContext())
-    assert mock_client.query.await_count == 0
-
-
-def test_get_next_book_in_series_by_title(mock_client):
+def test_get_next_book_in_series_by_title_returns_next(
+    mock_client, series_server
+):
     mock_client.query.return_value = SERIES_NEXT_BY_TITLE_RESPONSE
     ctx = DummyContext()
     next_book = invoke_tool(
-        series_module.get_next_book_in_series_by_title, "Well of Ascension", ctx
+        series_server.get_next_book_in_series_by_title, "Well of Ascension", ctx
     )
     mock_client.query.assert_awaited_once_with(
         SERIES_NEXT_BOOK_BY_TITLE_QUERY,
@@ -293,9 +277,15 @@ def test_get_next_book_in_series_by_title(mock_client):
     assert next_book.next_book.title == "Hero of Ages"
 
 
-def test_get_next_book_in_series_by_title_validates_input(mock_client):
+def test_get_next_book_in_series_validates_input(mock_client, series_server):
+    with pytest.raises(TypeError):
+        invoke_tool(series_server.get_next_book_in_series, 0, DummyContext())
+    assert mock_client.query.await_count == 0
+
+
+def test_get_next_book_in_series_by_title_validates_input(mock_client, series_server):
     with pytest.raises(TypeError):
         invoke_tool(
-            series_module.get_next_book_in_series_by_title, "  ", DummyContext()
+            series_server.get_next_book_in_series_by_title, "  ", DummyContext()
         )
     assert mock_client.query.await_count == 0

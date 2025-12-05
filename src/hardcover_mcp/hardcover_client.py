@@ -102,12 +102,31 @@ class HardcoverClient:
             else:
                 payload["variables"] = normalized_variables
 
-        async with httpx.AsyncClient(timeout=timeout, headers=self.headers) as client:
-            resp = await client.post(self._GRAPHQL_URL, json=payload)
-            resp.raise_for_status()
-            result = resp.json()
+        try:
+            async with httpx.AsyncClient(
+                timeout=timeout, headers=self.headers
+            ) as client:
+                resp = await client.post(self._GRAPHQL_URL, json=payload)
+                resp.raise_for_status()
+        except httpx.TimeoutException as exc:
+            await ctx.debug({"event": "hardcover.http_timeout", "seconds": timeout})
+            raise ToolError(f"Hardcover API timed out after {timeout}s") from exc
+        except httpx.HTTPStatusError as exc:
+            await ctx.debug(
+                {
+                    "event": "hardcover.http_error",
+                    "status": exc.response.status_code,
+                    "body": exc.response.text,
+                }
+            )
+            raise ToolError("Hardcover API returned an error response") from exc
+        except httpx.HTTPError as exc:
+            await ctx.debug({"event": "hardcover.transport_error", "error": str(exc)})
+            raise ToolError("Unable to reach Hardcover API") from exc
 
-        if "errors" in result:
-            raise RuntimeError(result["errors"])
+        result = resp.json()
+        if errors := result.get("errors"):
+            await ctx.debug({"event": "hardcover.graphql_error", "errors": errors})
+            raise ToolError(errors[0].get("message", "Hardcover API error"))
 
         return result.get("data", result)

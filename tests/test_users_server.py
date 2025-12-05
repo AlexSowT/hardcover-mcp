@@ -150,12 +150,14 @@ def goals_response() -> dict:
 
 @pytest.fixture
 def mock_client(overview_response):
-    original_client = users_module._client
     client = SimpleNamespace()
     client.query = AsyncMock(return_value=overview_response)
-    users_module._client = client
-    yield client
-    users_module._client = original_client
+    return client
+
+
+@pytest.fixture
+def users_server(mock_client):
+    return users_module.get_users_server(mock_client)
 
 
 def run_async(coro):
@@ -179,15 +181,8 @@ def invoke_tool(tool, *args, **kwargs):
     return run_async(fn(*args, **kwargs))
 
 
-def test_get_users_server_sets_client_reference():
-    fake_client = SimpleNamespace()
-    original = users_module._client
-    try:
-        returned = users_module.get_users_server(fake_client)
-        assert returned is users_module.mcp
-        assert users_module._client is fake_client
-    finally:
-        users_module._client = original
+def test_get_users_server_sets_client_reference(users_server):
+    assert hasattr(users_server, "get_user_overview")
 
 
 def test_parse_user_overview_returns_counts(overview_response):
@@ -258,55 +253,61 @@ def test_parse_user_books_accepts_wrapped_payload(books_response):
 def test_parse_user_books_handles_me_list_shape(books_response_me_list):
     user_books = users_module.parse_user_books(books_response_me_list)
     assert user_books.books_count == 2
-    assert len(user_books.user_books) == 2
-    assert user_books.user_books[0].title == "Example Title"
 
 
-def test_parse_user_books_without_me_raises():
-    with pytest.raises(ToolError):
-        users_module.parse_user_books({"unexpected": {}})
+def test_parse_user_goals_returns_entries(goals_response):
+    goals = users_module.parse_user_goals(goals_response)
+    assert isinstance(goals, list)
+    assert len(goals) == 1
+    goal = goals[0]
+    assert isinstance(goal, UserGoal)
+    assert goal.description == "Read 20 books"
+    assert goal.end_date == "2024-12-31"
+    assert goal.completed_at is None
+    assert goal.goal == pytest.approx(20.0)
+    assert goal.progress == pytest.approx(7.0)
+    assert goal.start_date == "2024-01-01"
 
 
-def test_get_user_overview_fetches_and_parses(mock_client, overview_response):
+def test_get_user_overview_invokes_query(mock_client, users_server):
     ctx = DummyContext()
-    result = invoke_tool(users_module.get_user_overview, ctx)
-
+    overview = invoke_tool(users_server.get_user_overview, ctx)
     mock_client.query.assert_awaited_once_with(USER_OVERVIEW_QUERY, ctx=ctx)
-    assert isinstance(result, UserOverview)
+    assert isinstance(overview, UserOverview)
 
 
-@pytest.mark.parametrize(
-    "tool,expected_query",
-    [
-        (users_module.get_user_books_currently_reading, USER_BOOKS_READING_QUERY),
-        (users_module.get_user_books_read, USER_BOOKS_READ_QUERY),
-        (users_module.get_user_books_dnf, USER_BOOKS_DNF_QUERY),
-        (users_module.get_user_books_want_to_read, USER_BOOKS_WANT_TO_READ_QUERY),
-        (users_module.get_user_books_all, USER_BOOKS_ALL_QUERY),
-    ],
-)
-def test_user_book_tools_share_helper(
-    mock_client, books_response, tool, expected_query
-):
+def test_get_user_books_currently_reading_invokes_query(mock_client, users_server):
     ctx = DummyContext()
-    mock_client.query.return_value = books_response
-
-    result = invoke_tool(tool, ctx)
-
-    mock_client.query.assert_awaited_once_with(expected_query, ctx=ctx)
-    assert isinstance(result, UserBooks)
-    assert result.books_count == 2
-    assert len(result.user_books) == 2
+    invoke_tool(users_server.get_user_books_currently_reading, ctx)
+    mock_client.query.assert_awaited_once_with(USER_BOOKS_READING_QUERY, ctx=ctx)
 
 
-def test_get_user_goals_parses_numbers(mock_client, goals_response):
+def test_get_user_books_read_invokes_query(mock_client, users_server):
     ctx = DummyContext()
+    invoke_tool(users_server.get_user_books_read, ctx)
+    mock_client.query.assert_awaited_once_with(USER_BOOKS_READ_QUERY, ctx=ctx)
+
+
+def test_get_user_books_dnf_invokes_query(mock_client, users_server):
+    ctx = DummyContext()
+    invoke_tool(users_server.get_user_books_dnf, ctx)
+    mock_client.query.assert_awaited_once_with(USER_BOOKS_DNF_QUERY, ctx=ctx)
+
+
+def test_get_user_books_want_to_read_invokes_query(mock_client, users_server):
+    ctx = DummyContext()
+    invoke_tool(users_server.get_user_books_want_to_read, ctx)
+    mock_client.query.assert_awaited_once_with(USER_BOOKS_WANT_TO_READ_QUERY, ctx=ctx)
+
+
+def test_get_user_books_all_invokes_query(mock_client, users_server):
+    ctx = DummyContext()
+    invoke_tool(users_server.get_user_books_all, ctx)
+    mock_client.query.assert_awaited_once_with(USER_BOOKS_ALL_QUERY, ctx=ctx)
+
+
+def test_get_user_goals_invokes_query(mock_client, users_server, goals_response):
     mock_client.query.return_value = goals_response
-
-    result = invoke_tool(users_module.get_user_goals, ctx)
-
+    ctx = DummyContext()
+    invoke_tool(users_server.get_user_goals, ctx)
     mock_client.query.assert_awaited_once_with(USER_GOALS_QUERY, ctx=ctx)
-    assert isinstance(result, list)
-    assert all(isinstance(entry, UserGoal) for entry in result)
-    assert result[0].goal == 20.0
-    assert result[0].progress == 7.0

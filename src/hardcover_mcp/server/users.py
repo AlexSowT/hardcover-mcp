@@ -12,26 +12,14 @@ from hardcover_mcp.queries.user import (
 )
 from hardcover_mcp.schemas.user import UserBook, UserBooks, UserGoal, UserOverview
 
-mcp = FastMCP(name="UsersMCP")
-_client: HardcoverClient | None = None
-
-
-def get_users_server(client: HardcoverClient) -> FastMCP:
-    global _client
-    _client = client
-    return mcp
-
 
 def _normalize_payload(payload) -> dict:
     """Normalize GraphQL responses that may wrap data or arrive as lists."""
     if isinstance(payload, list):
-        # Some MCP transports wrap single results in a list.
         payload = payload[0] if payload else {}
 
-    if (
-        isinstance(payload, dict)
-        and "data" in payload
-        and isinstance(payload["data"], dict)
+    if isinstance(payload, dict) and "data" in payload and isinstance(
+        payload["data"], dict
     ):
         payload = payload["data"]
 
@@ -52,12 +40,6 @@ def _ensure_me(payload) -> dict:
         raise ToolError("User information unavailable from API response")
 
     return me
-
-
-def _get_client() -> HardcoverClient:
-    if _client is None:
-        raise ToolError("Hardcover client has not been configured")
-    return _client
 
 
 def _safe_int(value) -> int:
@@ -149,74 +131,82 @@ def parse_user_goals(payload: dict) -> list[UserGoal]:
     return goals
 
 
-async def _query_and_parse_books(query: str, ctx: Context) -> UserBooks:
-    client = _get_client()
-    result = await client.query(query, ctx=ctx)
-    return parse_user_books(result)
+def get_users_server(client: HardcoverClient) -> FastMCP:
+    """Build a Users server bound to the provided Hardcover client."""
+    if client is None:
+        raise ToolError("Hardcover client has not been configured")
 
+    mcp = FastMCP(name="UsersMCP")
 
-@mcp.tool(
-    description="Get the current user's reading stats including shelf counts and membership status.",
-    tags={"users", "stats"},
-    annotations={"title": "Get user overview", "readOnlyHint": True},
-)
-async def get_user_overview(ctx: Context) -> UserOverview:
-    client = _get_client()
-    result = await client.query(USER_OVERVIEW_QUERY, ctx=ctx)
-    return parse_user_overview(result)
+    async def _query_and_parse_books(query: str, ctx: Context) -> UserBooks:
+        result = await client.query(query, ctx=ctx)
+        return parse_user_books(result)
 
+    @mcp.tool(
+        description="Get the current user's reading stats including shelf counts and membership status.",
+        tags={"users", "stats"},
+        annotations={"title": "Get user overview", "readOnlyHint": True},
+    )
+    async def get_user_overview(ctx: Context) -> UserOverview:
+        result = await client.query(USER_OVERVIEW_QUERY, ctx=ctx)
+        return parse_user_overview(result)
 
-@mcp.tool(
-    description="Get the books the current user is actively reading.",
-    tags={"users", "books"},
-    annotations={"title": "Get currently reading books", "readOnlyHint": True},
-)
-async def get_user_books_currently_reading(ctx: Context) -> UserBooks:
-    return await _query_and_parse_books(USER_BOOKS_READING_QUERY, ctx)
+    @mcp.tool(
+        description="Get the books the current user is actively reading.",
+        tags={"users", "books"},
+        annotations={"title": "Get currently reading books", "readOnlyHint": True},
+    )
+    async def get_user_books_currently_reading(ctx: Context) -> UserBooks:
+        return await _query_and_parse_books(USER_BOOKS_READING_QUERY, ctx)
 
+    @mcp.tool(
+        description="Get the books the current user has finished reading.",
+        tags={"users", "books"},
+        annotations={"title": "Get finished books", "readOnlyHint": True},
+    )
+    async def get_user_books_read(ctx: Context) -> UserBooks:
+        return await _query_and_parse_books(USER_BOOKS_READ_QUERY, ctx)
 
-@mcp.tool(
-    description="Get the books the current user has finished reading.",
-    tags={"users", "books"},
-    annotations={"title": "Get finished books", "readOnlyHint": True},
-)
-async def get_user_books_read(ctx: Context) -> UserBooks:
-    return await _query_and_parse_books(USER_BOOKS_READ_QUERY, ctx)
+    @mcp.tool(
+        description="Get the books the current user did not finish.",
+        tags={"users", "books"},
+        annotations={"title": "Get DNF books", "readOnlyHint": True},
+    )
+    async def get_user_books_dnf(ctx: Context) -> UserBooks:
+        return await _query_and_parse_books(USER_BOOKS_DNF_QUERY, ctx)
 
+    @mcp.tool(
+        description="Get the books the current user wants to read.",
+        tags={"users", "books"},
+        annotations={"title": "Get want-to-read books", "readOnlyHint": True},
+    )
+    async def get_user_books_want_to_read(ctx: Context) -> UserBooks:
+        return await _query_and_parse_books(USER_BOOKS_WANT_TO_READ_QUERY, ctx)
 
-@mcp.tool(
-    description="Get the books the current user did not finish.",
-    tags={"users", "books"},
-    annotations={"title": "Get DNF books", "readOnlyHint": True},
-)
-async def get_user_books_dnf(ctx: Context) -> UserBooks:
-    return await _query_and_parse_books(USER_BOOKS_DNF_QUERY, ctx)
+    @mcp.tool(
+        description="Get all books linked to the current user.",
+        tags={"users", "books"},
+        annotations={"title": "Get all user books", "readOnlyHint": True},
+    )
+    async def get_user_books_all(ctx: Context) -> UserBooks:
+        return await _query_and_parse_books(USER_BOOKS_ALL_QUERY, ctx)
 
+    @mcp.tool(
+        description="Get the current user's reading goals and progress.",
+        tags={"users", "goals"},
+        annotations={"title": "Get user goals", "readOnlyHint": True},
+    )
+    async def get_user_goals(ctx: Context) -> list[UserGoal]:
+        result = await client.query(USER_GOALS_QUERY, ctx=ctx)
+        return parse_user_goals(result)
 
-@mcp.tool(
-    description="Get the books the current user wants to read.",
-    tags={"users", "books"},
-    annotations={"title": "Get want-to-read books", "readOnlyHint": True},
-)
-async def get_user_books_want_to_read(ctx: Context) -> UserBooks:
-    return await _query_and_parse_books(USER_BOOKS_WANT_TO_READ_QUERY, ctx)
+    # Attach tool callables for introspection/testing convenience.
+    mcp.get_user_overview = get_user_overview  # type: ignore[attr-defined]
+    mcp.get_user_books_currently_reading = get_user_books_currently_reading  # type: ignore[attr-defined]
+    mcp.get_user_books_read = get_user_books_read  # type: ignore[attr-defined]
+    mcp.get_user_books_dnf = get_user_books_dnf  # type: ignore[attr-defined]
+    mcp.get_user_books_want_to_read = get_user_books_want_to_read  # type: ignore[attr-defined]
+    mcp.get_user_books_all = get_user_books_all  # type: ignore[attr-defined]
+    mcp.get_user_goals = get_user_goals  # type: ignore[attr-defined]
 
-
-@mcp.tool(
-    description="Get all books linked to the current user.",
-    tags={"users", "books"},
-    annotations={"title": "Get all user books", "readOnlyHint": True},
-)
-async def get_user_books_all(ctx: Context) -> UserBooks:
-    return await _query_and_parse_books(USER_BOOKS_ALL_QUERY, ctx)
-
-
-@mcp.tool(
-    description="Get the current user's reading goals and progress.",
-    tags={"users", "goals"},
-    annotations={"title": "Get user goals", "readOnlyHint": True},
-)
-async def get_user_goals(ctx: Context) -> list[UserGoal]:
-    client = _get_client()
-    result = await client.query(USER_GOALS_QUERY, ctx=ctx)
-    return parse_user_goals(result)
+    return mcp
