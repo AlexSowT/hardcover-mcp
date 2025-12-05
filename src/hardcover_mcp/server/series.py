@@ -14,25 +14,10 @@ from hardcover_mcp.schemas.series import (
     NextInSeries,
 )
 
-mcp = FastMCP(name="SeriesMCP")
-_client: HardcoverClient | None = None
-
-
-def get_series_server(client: HardcoverClient) -> FastMCP:
-    global _client
-    _client = client
-    return mcp
-
-
-def _get_client() -> HardcoverClient:
-    if _client is None:
-        raise ToolError("Hardcover client has not been configured")
-    return _client
-
 
 def _validate_paging(limit: int, offset: int = 0) -> None:
-    if not isinstance(limit, int) or limit < 1:
-        raise TypeError("limit must be a positive integer")
+    if not isinstance(limit, int) or limit < 1 or limit > 50:
+        raise TypeError("limit must be an integer between 1 and 50")
     if not isinstance(offset, int) or offset < 0:
         raise TypeError("offset must be a non-negative integer")
 
@@ -132,99 +117,111 @@ def parse_next_in_series(data, current_book_id: int) -> NextInSeries:
     )
 
 
-@mcp.tool(
-    description="Search series by name.",
-    tags={"series", "search"},
-    annotations={"title": "Search series by name", "readOnlyHint": True},
-)
-async def get_series_by_name(
-    name: str, ctx: Context, limit: int = 5, offset: int = 0
-) -> list[Series]:
-    if not isinstance(name, str) or not name.strip():
-        raise TypeError("name must be a non-empty string")
-    _validate_paging(limit, offset)
+def get_series_server(client: HardcoverClient) -> FastMCP:
+    """Build a Series server bound to the provided Hardcover client."""
+    if client is None:
+        raise ToolError("Hardcover client has not been configured")
 
-    client = _get_client()
-    result = await client.query(
-        SERIES_BY_NAME_QUERY,
-        variables={"name": name, "limit": limit, "offset": offset},
-        ctx=ctx,
+    mcp = FastMCP(name="SeriesMCP")
+
+    @mcp.tool(
+        description="Search series by name.",
+        tags={"series", "search"},
+        annotations={"title": "Search series by name", "readOnlyHint": True},
     )
-    series_list = result["series"]
-    if not series_list:
-        raise ToolError(f"No series found matching name '{name}'.")
-    return parse_series(series_list)
+    async def get_series_by_name(
+        name: str, ctx: Context, limit: int = 5, offset: int = 0
+    ) -> list[Series]:
+        if not isinstance(name, str) or not name.strip():
+            raise TypeError("name must be a non-empty string")
+        _validate_paging(limit, offset)
 
+        result = await client.query(
+            SERIES_BY_NAME_QUERY,
+            variables={"name": name, "limit": limit, "offset": offset},
+            ctx=ctx,
+        )
+        series_list = result["series"]
+        if not series_list:
+            raise ToolError(f"No series found matching name '{name}'.")
+        return parse_series(series_list)
 
-@mcp.tool(
-    description="Find series memberships for a given book title.",
-    tags={"series", "search"},
-    annotations={"title": "Find series by book title", "readOnlyHint": True},
-)
-async def get_series_by_book_title(
-    title: str, ctx: Context, limit: int = 5
-) -> list[SeriesMembership]:
-    if not isinstance(title, str) or not title.strip():
-        raise TypeError("title must be a non-empty string")
-    _validate_paging(limit, 0)
-
-    client = _get_client()
-    result = await client.query(
-        SERIES_BY_BOOK_TITLE_QUERY,
-        variables={"title": title, "limit": limit},
-        ctx=ctx,
+    @mcp.tool(
+        description="Find series memberships for a given book title.",
+        tags={"series", "search"},
+        annotations={"title": "Find series by book title", "readOnlyHint": True},
     )
-    memberships = result["book_series"]
-    if not memberships:
-        raise ToolError(f"No series memberships found for book title '{title}'.")
-    return parse_series_memberships(memberships)
+    async def get_series_by_book_title(
+        title: str, ctx: Context, limit: int = 5
+    ) -> list[SeriesMembership]:
+        if not isinstance(title, str) or not title.strip():
+            raise TypeError("title must be a non-empty string")
+        _validate_paging(limit, 0)
 
+        result = await client.query(
+            SERIES_BY_BOOK_TITLE_QUERY,
+            variables={"title": title, "limit": limit},
+            ctx=ctx,
+        )
+        memberships = result["book_series"]
+        if not memberships:
+            raise ToolError(f"No series memberships found for book title '{title}'.")
+        return parse_series_memberships(memberships)
 
-@mcp.tool(
-    description="Get the next book in a series given a book ID.",
-    tags={"series", "search"},
-    annotations={"title": "Get next book in series", "readOnlyHint": True},
-)
-async def get_next_book_in_series(book_id: int, ctx: Context) -> NextInSeries:
-    if not isinstance(book_id, int) or book_id < 1:
-        raise TypeError("book_id must be a positive integer")
-
-    client = _get_client()
-    result = await client.query(
-        SERIES_NEXT_BOOK_QUERY, variables={"book_id": book_id}, ctx=ctx
+    @mcp.tool(
+        description="Get the next book in a series given a book ID.",
+        tags={"series", "search"},
+        annotations={"title": "Get next book in series", "readOnlyHint": True},
     )
-    series_books = result["book_series"]
-    if not series_books:
-        raise ToolError(f"No series information found for book id {book_id}.")
+    async def get_next_book_in_series(book_id: int, ctx: Context) -> NextInSeries:
+        if not isinstance(book_id, int) or book_id < 1:
+            raise TypeError("book_id must be a positive integer")
 
-    parsed = parse_next_in_series(series_books, current_book_id=book_id)
-    if parsed.next_book is None:
-        raise ToolError(f"No next book found in the series for book id {book_id}.")
-    return parsed
+        result = await client.query(
+            SERIES_NEXT_BOOK_QUERY, variables={"book_id": book_id}, ctx=ctx
+        )
+        series_books = result["book_series"]
+        if not series_books:
+            raise ToolError(f"No series information found for book id {book_id}.")
 
+        parsed = parse_next_in_series(series_books, current_book_id=book_id)
+        if parsed.next_book is None:
+            raise ToolError(f"No next book found in the series for book id {book_id}.")
+        return parsed
 
-@mcp.tool(
-    description="Get the next book in a series given a book title.",
-    tags={"series", "search"},
-    annotations={"title": "Get next book in series by title", "readOnlyHint": True},
-)
-async def get_next_book_in_series_by_title(title: str, ctx: Context) -> NextInSeries:
-    if not isinstance(title, str) or not title.strip():
-        raise TypeError("title must be a non-empty string")
-
-    client = _get_client()
-    result = await client.query(
-        SERIES_NEXT_BOOK_BY_TITLE_QUERY, variables={"title": title.strip()}, ctx=ctx
+    @mcp.tool(
+        description="Get the next book in a series given a book title.",
+        tags={"series", "search"},
+        annotations={"title": "Get next book in series by title", "readOnlyHint": True},
     )
-    series_books = result["book_series"]
-    if not series_books:
-        raise ToolError(f"No series information found for book title '{title}'.")
+    async def get_next_book_in_series_by_title(
+        title: str, ctx: Context
+    ) -> NextInSeries:
+        if not isinstance(title, str) or not title.strip():
+            raise TypeError("title must be a non-empty string")
 
-    current_book_id = _coerce_int((series_books[0].get("book") or {}).get("id"))
-    if current_book_id is None:
-        raise ToolError(f"No book id found for title '{title}'.")
+        result = await client.query(
+            SERIES_NEXT_BOOK_BY_TITLE_QUERY, variables={"title": title.strip()}, ctx=ctx
+        )
+        series_books = result["book_series"]
+        if not series_books:
+            raise ToolError(f"No series information found for book title '{title}'.")
 
-    parsed = parse_next_in_series(series_books, current_book_id=current_book_id)
-    if parsed.next_book is None:
-        raise ToolError(f"No next book found in the series for book title '{title}'.")
-    return parsed
+        current_book_id = _coerce_int((series_books[0].get("book") or {}).get("id"))
+        if current_book_id is None:
+            raise ToolError(f"No book id found for title '{title}'.")
+
+        parsed = parse_next_in_series(series_books, current_book_id=current_book_id)
+        if parsed.next_book is None:
+            raise ToolError(
+                f"No next book found in the series for book title '{title}'."
+            )
+        return parsed
+
+    # Attach tool callables for introspection/testing convenience.
+    mcp.get_series_by_name = get_series_by_name  # type: ignore[attr-defined]
+    mcp.get_series_by_book_title = get_series_by_book_title  # type: ignore[attr-defined]
+    mcp.get_next_book_in_series = get_next_book_in_series  # type: ignore[attr-defined]
+    mcp.get_next_book_in_series_by_title = get_next_book_in_series_by_title  # type: ignore[attr-defined]
+
+    return mcp

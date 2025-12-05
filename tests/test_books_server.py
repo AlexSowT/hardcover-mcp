@@ -75,36 +75,7 @@ BOOK_RESPONSE = {
             }
         }
     ],
-    "description": (
-        "Consists of the following short stories -\r\n"
-        '"The Abominable History of the Man with Copper Fingers": An artist\'s jealous '
-        "nature leads to an investigation of his mistress' disappearance.\r\n"
-        '"The Entertaining Episode of the Article in Question": A grammatical mistake '
-        "in French unmasks a clever criminal.\r\n"
-        '"The Fascinating Problem of Uncle Meleager\'s Will": The disposal of a dead '
-        "man's fortune depends on his penchant for cross-word puzzles.\r\n"
-        '"The Fantastic Horror of the Cat in the Bag": A high-speed chase and a lost '
-        "bag converge with a gruesome discovery.\r\n"
-        '"The Unprincipled Affair of the Practical Joker": A lady pleads for Lord '
-        "Peter's help in retrieving a valuable necklace, and more importantly, a "
-        "portrait with an indiscreet inscription.\r\n"
-        '"The Undignified Melodrama of the Bone of Contention": Lord Peter, visiting '
-        "friends in the country, sees a ghostly carriage, hears rumors of an odd "
-        "will, and deduces that foul play is afoot.\r\n"
-        '"The Vindictive Story of the Footsteps That Ran": Lord Peter deduces the '
-        "whereabouts of a cleverly hidden murder weapon.\r\n"
-        '"The Bibulous Business of a Matter of Taste": Lord Peter\'s famous palate is '
-        "the deciding factor in acquiring wartime intelligence.\r\n"
-        '"The Learned Adventure of the Dragon\'s Head": Viscount St. George appears '
-        "as a boy as Lord Peter uses clues from a rare book to find a treasure.\r\n"
-        '"The Piscatorial Farce of the Stolen Stomach": Involving several Scotsmen, '
-        "a digestive organ, and a handful of diamonds.\r\n"
-        '"The Unsolved Puzzle of the Man with No Face": Which ends with Wimsey '
-        "letting a murderer go free, at least partially because he is a good "
-        "painter.\r\n"
-        '"The Adventurous Exploit of the Cave of Ali Baba": Lord Peter infiltrates a '
-        "den of ruthless thieves; notable for unusual technology."
-    ),
+    "description": "Consists of short stories",
     "users_read_count": 24,
 }
 
@@ -121,19 +92,19 @@ class DummyContext:
 
 @pytest.fixture
 def sample_response() -> dict:
-    """GraphQL payload resembling the Hardcover API response."""
-
     return {"books": [BOOK_RESPONSE]}
 
 
 @pytest.fixture
 def mock_client(sample_response):
-    original_client = books_module._client
     client = SimpleNamespace()
     client.query = AsyncMock(return_value=sample_response)
-    books_module._client = client
-    yield client
-    books_module._client = original_client
+    return client
+
+
+@pytest.fixture
+def books_server(mock_client):
+    return books_module.get_books_server(mock_client)
 
 
 @pytest.fixture
@@ -160,35 +131,12 @@ def assert_matches_book(book: Book) -> None:
     assert book.ratings_count == BOOK_RESPONSE["ratings_count"]
     assert book.reviews_count == BOOK_RESPONSE["reviews_count"]
     assert book.author_names == ["Dorothy L. Sayers"]
-    assert book.description.startswith("Consists of the following short stories")
+    assert book.description.startswith("Consists of short stories")
     assert book.users_read_count == BOOK_RESPONSE["users_read_count"]
     assert book.pages == BOOK_RESPONSE["pages"]
     assert book.audio_seconds == BOOK_RESPONSE["audio_seconds"]
     assert len(book.taggings) == 1
     assert book.taggings[0].tag == "Fantasy"
-
-
-def test_get_books_server_sets_client_reference():
-    fake_client = SimpleNamespace()
-    original = books_module._client
-    try:
-        returned = books_module.get_books_server(fake_client)
-        assert returned is books_module.mcp
-        assert books_module._client is fake_client
-    finally:
-        books_module._client = original
-
-
-def test_parse_book_response_accepts_list_payload():
-    result = books_module.parse_book_response([BOOK_RESPONSE])
-    assert len(result) == 1
-    assert_matches_book(result[0])
-
-
-def test_parse_book_response_accepts_single_dict():
-    result = books_module.parse_book_response(BOOK_RESPONSE)
-    assert len(result) == 1
-    assert_matches_book(result[0])
 
 
 def run_async(coro):
@@ -212,29 +160,47 @@ def invoke_tool(tool, *args, **kwargs):
     return run_async(fn(*args, **kwargs))
 
 
-def test_get_book_by_id_returns_parsed_books(mock_client):
+def test_get_books_server_sets_client_reference(books_server):
+    assert hasattr(books_server, "get_book_by_id")
+
+
+def test_parse_book_response_accepts_list_payload():
+    result = books_module.parse_book_response([BOOK_RESPONSE])
+    assert len(result) == 1
+    assert_matches_book(result[0])
+
+
+def test_parse_book_response_accepts_single_dict():
+    result = books_module.parse_book_response(BOOK_RESPONSE)
+    assert len(result) == 1
+    assert_matches_book(result[0])
+
+
+def test_get_book_by_id_returns_parsed_books(mock_client, books_server):
     ctx = DummyContext()
-    result = invoke_tool(books_module.get_book_by_id, 1, ctx)
+    result = invoke_tool(books_server.get_book_by_id, 1, ctx)
 
     mock_client.query.assert_awaited_once_with(
-        BOOKS_BY_ID_QUERY, variables={"id": 1}, ctx=ctx
+        BOOKS_BY_ID_QUERY,
+        variables={"id": 1, "tagging_count_minimum": 5000},
+        ctx=ctx,
     )
 
     assert len(result) == 1
     assert_matches_book(result[0])
 
 
-def test_get_book_by_id_validates_identifier(mock_client):
+def test_get_book_by_id_validates_identifier(mock_client, books_server):
     ctx = DummyContext()
     with pytest.raises(TypeError):
-        invoke_tool(books_module.get_book_by_id, 0, ctx)
+        invoke_tool(books_server.get_book_by_id, 0, ctx)
 
     assert mock_client.query.await_count == 0
 
 
-def test_get_books_by_title_returns_parsed_books(mock_client):
+def test_get_books_by_title_returns_parsed_books(mock_client, books_server):
     ctx = DummyContext()
-    result = invoke_tool(books_module.get_books_by_title, "anything", ctx)
+    result = invoke_tool(books_server.get_books_by_title, "anything", ctx)
 
     mock_client.query.assert_awaited_once_with(
         BOOKS_BY_TITLE_QUERY,
@@ -246,24 +212,24 @@ def test_get_books_by_title_returns_parsed_books(mock_client):
     assert_matches_book(result[0])
 
 
-def test_get_books_by_title_validates_title(mock_client):
+def test_get_books_by_title_validates_title(mock_client, books_server):
     with pytest.raises(TypeError):
-        invoke_tool(books_module.get_books_by_title, "  ", DummyContext())
+        invoke_tool(books_server.get_books_by_title, "  ", DummyContext())
 
     assert mock_client.query.await_count == 0
 
 
-def test_get_books_by_title_raises_when_no_results(mock_client):
+def test_get_books_by_title_raises_when_no_results(mock_client, books_server):
     mock_client.query.return_value = {"books": []}
 
     with pytest.raises(ToolError):
-        invoke_tool(books_module.get_books_by_title, "missing", DummyContext())
+        invoke_tool(books_server.get_books_by_title, "missing", DummyContext())
 
 
-def test_get_books_by_genre_returns_parsed_books(mock_client):
+def test_get_books_by_genre_returns_parsed_books(mock_client, books_server):
     ctx = DummyContext()
     result = invoke_tool(
-        books_module.get_books_by_genre,
+        books_server.get_books_by_genre,
         ["Fantasy"],
         10,
         2,
@@ -302,22 +268,22 @@ def test_get_books_by_genre_returns_parsed_books(mock_client):
         (["Fantasy"], 1, 1, 0, 0, 2025, 2024, DummyContext()),
     ],
 )
-def test_get_books_by_genre_validates_inputs(mock_client, args):
+def test_get_books_by_genre_validates_inputs(mock_client, books_server, args):
     with pytest.raises(TypeError):
-        invoke_tool(books_module.get_books_by_genre, *args)
+        invoke_tool(books_server.get_books_by_genre, *args)
     assert mock_client.query.await_count == 0
 
 
 @pytest.mark.parametrize(
-    "tool, field",
+    "tool_attr, field",
     [
-        (books_module.get_books_by_mood, "moods"),
-        (books_module.get_books_by_tag, "tags"),
-        (books_module.get_books_by_content_warning, "content_warnings"),
-        (books_module.get_books_by_pace, "paces"),
+        ("get_books_by_mood", "moods"),
+        ("get_books_by_tag", "tags"),
+        ("get_books_by_content_warning", "content_warnings"),
+        ("get_books_by_pace", "paces"),
     ],
 )
-def test_book_tag_queries_happy_path(mock_client, tool, field):
+def test_book_tag_queries_happy_path(mock_client, books_server, tool_attr, field):
     ctx = DummyContext()
     args = {
         "moods": ["dark"],
@@ -326,7 +292,7 @@ def test_book_tag_queries_happy_path(mock_client, tool, field):
         "paces": ["fast"],
     }
     result = invoke_tool(
-        tool,
+        getattr(books_server, tool_attr),
         args[field],
         5,
         2,
@@ -341,8 +307,9 @@ def test_book_tag_queries_happy_path(mock_client, tool, field):
 
 
 def test_get_books_by_tag_invokes_query(mock_client):
+    books_server = books_module.get_books_server(mock_client)
     ctx = DummyContext()
-    invoke_tool(books_module.get_books_by_tag, ["magic"], 5, 1, 0, 50, 0, 9999, ctx)
+    invoke_tool(books_server.get_books_by_tag, ["magic"], 5, 1, 0, 50, 0, 9999, ctx)
     mock_client.query.assert_awaited_once_with(
         BOOKS_BY_TAG_QUERY,
         variables={
@@ -359,9 +326,10 @@ def test_get_books_by_tag_invokes_query(mock_client):
 
 
 def test_get_books_by_length_happy_path(mock_client):
+    books_server = books_module.get_books_server(mock_client)
     ctx = DummyContext()
     result = invoke_tool(
-        books_module.get_books_by_length,
+        books_server.get_books_by_length,
         100,
         300,
         0,
@@ -377,17 +345,19 @@ def test_get_books_by_length_happy_path(mock_client):
 
 
 def test_get_books_by_length_validates_bounds(mock_client):
+    books_server = books_module.get_books_server(mock_client)
     with pytest.raises(TypeError):
         invoke_tool(
-            books_module.get_books_by_length, 300, 100, 0, 1, 0, 0, 9999, DummyContext()
+            books_server.get_books_by_length, 300, 100, 0, 1, 0, 0, 9999, DummyContext()
         )
     assert mock_client.query.await_count == 0
 
 
 def test_get_book_reviews_parses_reviews(mock_client, reviews_response):
+    books_server = books_module.get_books_server(mock_client)
     mock_client.query.return_value = reviews_response
     ctx = DummyContext()
-    reviews = invoke_tool(books_module.get_book_reviews, 10, 1, 0, ctx)
+    reviews = invoke_tool(books_server.get_book_reviews, 10, 1, 0, ctx)
     mock_client.query.assert_awaited_once_with(
         BOOK_REVIEWS_QUERY,
         variables={"book_id": 10, "limit": 1, "offset": 0},
@@ -400,16 +370,18 @@ def test_get_book_reviews_parses_reviews(mock_client, reviews_response):
 
 
 def test_get_book_reviews_validates_inputs(mock_client):
+    books_server = books_module.get_books_server(mock_client)
     with pytest.raises(TypeError):
-        invoke_tool(books_module.get_book_reviews, 0, 1, 0, DummyContext())
+        invoke_tool(books_server.get_book_reviews, 0, 1, 0, DummyContext())
     assert mock_client.query.await_count == 0
 
 
 def test_get_book_reviews_by_title_happy_path(mock_client, reviews_response):
+    books_server = books_module.get_books_server(mock_client)
     mock_client.query.return_value = reviews_response
     ctx = DummyContext()
     reviews = invoke_tool(
-        books_module.get_book_reviews_by_title, "Some Title", 1, 0, ctx
+        books_server.get_book_reviews_by_title, "Some Title", 1, 0, ctx
     )
     mock_client.query.assert_awaited_once_with(
         BOOK_REVIEWS_BY_TITLE_QUERY,
@@ -420,6 +392,7 @@ def test_get_book_reviews_by_title_happy_path(mock_client, reviews_response):
 
 
 def test_get_book_reviews_by_title_validates_title(mock_client):
+    books_server = books_module.get_books_server(mock_client)
     with pytest.raises(TypeError):
-        invoke_tool(books_module.get_book_reviews_by_title, " ", 1, 0, DummyContext())
+        invoke_tool(books_server.get_book_reviews_by_title, " ", 1, 0, DummyContext())
     assert mock_client.query.await_count == 0
