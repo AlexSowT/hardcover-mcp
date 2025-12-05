@@ -89,13 +89,14 @@ async def get_books_by_title(title: str, ctx: Context, tagging_count_minimum: in
     result = await _client.query(
             BOOKS_BY_TITLE_QUERY, variables={"title": title, "tagging_count_minimum": tagging_count_minimum}, ctx=ctx
     )
+    await ctx.debug(result)
     book_data = result["books"]
 
     if len(book_data) == 0:
         # Possible cause for illitication here to find a correct title
         raise ToolError(f"No books found with the title {title}.")
 
-    return book_data
+    return parse_book_response(book_data)
 
 
 @mcp.tool(
