@@ -197,7 +197,9 @@ def test_get_books_by_title_returns_parsed_books(mock_client):
     result = invoke_tool(books_module.get_books_by_title, "anything", ctx)
 
     mock_client.query.assert_awaited_once_with(
-        BOOKS_BY_TITLE_QUERY, variables={"title": "anything"}, ctx=ctx
+        BOOKS_BY_TITLE_QUERY,
+        variables={"title": "anything", "tagging_count_minimum": 5000},
+        ctx=ctx,
     )
 
     assert len(result) == 1
