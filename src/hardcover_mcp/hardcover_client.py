@@ -102,7 +102,6 @@ class HardcoverClient:
             else:
                 payload["variables"] = normalized_variables
 
-        await ctx.debug(payload)
         async with httpx.AsyncClient(timeout=timeout, headers=self.headers) as client:
             resp = await client.post(self._GRAPHQL_URL, json=payload)
             resp.raise_for_status()

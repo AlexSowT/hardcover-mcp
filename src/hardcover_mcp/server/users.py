@@ -28,8 +28,10 @@ def _normalize_payload(payload) -> dict:
         # Some MCP transports wrap single results in a list.
         payload = payload[0] if payload else {}
 
-    if isinstance(payload, dict) and "data" in payload and isinstance(
-        payload["data"], dict
+    if (
+        isinstance(payload, dict)
+        and "data" in payload
+        and isinstance(payload["data"], dict)
     ):
         payload = payload["data"]
 
@@ -150,7 +152,6 @@ def parse_user_goals(payload: dict) -> list[UserGoal]:
 async def _query_and_parse_books(query: str, ctx: Context) -> UserBooks:
     client = _get_client()
     result = await client.query(query, ctx=ctx)
-    await ctx.debug(result)
     return parse_user_books(result)
 
 
@@ -162,7 +163,6 @@ async def _query_and_parse_books(query: str, ctx: Context) -> UserBooks:
 async def get_user_overview(ctx: Context) -> UserOverview:
     client = _get_client()
     result = await client.query(USER_OVERVIEW_QUERY, ctx=ctx)
-    await ctx.debug(result)
     return parse_user_overview(result)
 
 
@@ -219,5 +219,4 @@ async def get_user_books_all(ctx: Context) -> UserBooks:
 async def get_user_goals(ctx: Context) -> list[UserGoal]:
     client = _get_client()
     result = await client.query(USER_GOALS_QUERY, ctx=ctx)
-    await ctx.debug(result)
     return parse_user_goals(result)
