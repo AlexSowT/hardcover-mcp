@@ -17,6 +17,9 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+## Transport Protocol
+This server currently only supports STDIO as the transport protocol
+
 ## Usage
 1) Get an API key from https://hardcover.app/account/api. Copy the value exactly as provided (it already starts with `Bearer `).  
 2) Export it for the server:
