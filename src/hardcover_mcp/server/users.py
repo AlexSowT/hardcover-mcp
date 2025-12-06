@@ -19,8 +19,10 @@ def _normalize_payload(payload) -> dict:
     if isinstance(payload, list):
         payload = payload[0] if payload else {}
 
-    if isinstance(payload, dict) and "data" in payload and isinstance(
-        payload["data"], dict
+    if (
+        isinstance(payload, dict)
+        and "data" in payload
+        and isinstance(payload["data"], dict)
     ):
         payload = payload["data"]
 

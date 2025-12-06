@@ -260,9 +260,7 @@ def test_get_next_book_in_series_returns_next(mock_client, series_server):
     assert next_book.next_book.title == "Hero of Ages"
 
 
-def test_get_next_book_in_series_by_title_returns_next(
-    mock_client, series_server
-):
+def test_get_next_book_in_series_by_title_returns_next(mock_client, series_server):
     mock_client.query.return_value = SERIES_NEXT_BY_TITLE_RESPONSE
     ctx = DummyContext()
     next_book = invoke_tool(
