@@ -40,6 +40,13 @@ USER_BOOK_FIELDS_FRAGMENT = """
         book {
           id
           title
+          taggings(
+            where: {tag: {count: {_gt: 5000}}}
+            order_by: {tag: {tag_category: {id: asc}, count: desc}}
+            limit: 25
+          ) {
+            tag { tag tag_category { id category } }
+          }
         }
         first_read_date
         first_started_reading_date

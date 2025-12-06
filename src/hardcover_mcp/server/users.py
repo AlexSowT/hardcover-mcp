@@ -11,6 +11,7 @@ from hardcover_mcp.queries.user import (
     USER_OVERVIEW_QUERY,
 )
 from hardcover_mcp.schemas.user import UserBook, UserBooks, UserGoal, UserOverview
+from hardcover_mcp.schemas.book import Tagging
 
 
 def _normalize_payload(payload) -> dict:
@@ -98,6 +99,24 @@ def parse_user_books(payload: dict) -> UserBooks:
     books: list[UserBook] = []
     for entry in me.get("user_books", []):
         book_info = (entry or {}).get("book") or {}
+        taggings: list[Tagging] = []
+        seen: set[tuple[str | None, int | None]] = set()
+        for tagging in book_info.get("taggings", []) or []:
+            tag_info = tagging.get("tag") if tagging else {}
+            tag_value = tag_info.get("tag")
+            cat = (tag_info.get("tag_category") or {}).get("category")
+            cat_id = (tag_info.get("tag_category") or {}).get("id")
+            dedup_key = (tag_value, cat_id)
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            taggings.append(
+                Tagging(
+                    tag=tag_value or "",
+                    category=cat,
+                    category_id=cat_id,
+                )
+            )
         books.append(
             UserBook(
                 id=_optional_int(book_info.get("id")),
@@ -107,6 +126,7 @@ def parse_user_books(payload: dict) -> UserBooks:
                 has_review=bool(entry.get("has_review")),
                 last_read_date=entry.get("last_read_date"),
                 status_id=_optional_int(entry.get("status_id")),
+                taggings=taggings,
             )
         )
 

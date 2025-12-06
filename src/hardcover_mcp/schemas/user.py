@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from hardcover_mcp.schemas.book import Tagging
 
 
 @dataclass
@@ -22,6 +23,7 @@ class UserBook:
     has_review: bool
     last_read_date: str | None
     status_id: int | None
+    taggings: list[Tagging] | None = None
 
 
 @dataclass
