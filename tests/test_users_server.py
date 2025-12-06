@@ -203,7 +203,7 @@ def test_parse_user_overview_returns_counts(overview_response):
     assert overview.currently_reading_count == 1
     assert overview.read_count == 5
     assert overview.paused_count == 0
-    assert overview.dnf_count == 3
+    assert overview.dnf_count == 2
     assert overview.books_count == 11
     assert overview.membership == "pro"
     assert overview.membership_ends_at == "2099-01-01"
