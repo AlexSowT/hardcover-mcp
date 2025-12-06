@@ -23,9 +23,21 @@ pip install -e .
 ```bash
 export HARDCOVER_API_KEY="Bearer <your-token>"
 ```
+
+### Running the server directly
 3) Start the MCP server:
 ```bash
-python -m hardcover_mcp.main
+uv run src/hardcover_mcp/main.py
+```
+
+### Configuring STDIO for a AI chat
+Codex
+```bash
+[mcp_servers.hardcover_mcp]
+command = "uv"
+args = ["run", "src/hardcover_mcp/main.py"]
+env = { "HARDCOVER_API_KEY" = "API KEY heRE" }
+cwd = "full_path_to/hardcover_mcp"
 ```
 The server registers the `books.*`, `users.*`, and `series.*` tool namespaces, plus resources like `hardcover/tag-categories` and usage prompts such as `hardcover/fantasy-this-year`.
 
