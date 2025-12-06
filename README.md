@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server that exposes read-only access to the Hardcover.app GraphQL API. Tools are namespaced under `books.*`, `users.*`, and `series.*`, with resources and prompts to guide safe, low-volume querying.
 
+This is an unofficial, community-maintained server and is not affiliated with Hardcover.app.
+
 ## Requirements
 - Python 3.11+
 - A Hardcover API key (read-only Bearer token) from https://hardcover.app/account/api
