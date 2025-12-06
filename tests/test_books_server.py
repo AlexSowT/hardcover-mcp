@@ -306,8 +306,7 @@ def test_book_tag_queries_happy_path(mock_client, books_server, tool_attr, field
     assert_matches_book(result[0])
 
 
-def test_get_books_by_tag_invokes_query(mock_client):
-    books_server = books_module.get_books_server(mock_client)
+def test_get_books_by_tag_invokes_query(mock_client, books_server):
     ctx = DummyContext()
     invoke_tool(books_server.get_books_by_tag, ["magic"], 5, 1, 0, 50, 0, 9999, ctx)
     mock_client.query.assert_awaited_once_with(
@@ -325,10 +324,73 @@ def test_get_books_by_tag_invokes_query(mock_client):
     )
 
 
-def test_get_books_by_length_happy_path(mock_client):
-    books_server = books_module.get_books_server(mock_client)
+def test_get_books_by_mood_invokes_query(mock_client, books_server):
     ctx = DummyContext()
-    result = invoke_tool(
+    invoke_tool(books_server.get_books_by_mood, ["cozy"], 50, 5, 2, 5000, 0, 9999, ctx)
+    mock_client.query.assert_awaited_once_with(
+        BOOKS_BY_MOOD_QUERY,
+        variables={
+            "moods": ["cozy"],
+            "rating_minimum": 50,
+            "limit": 5,
+            "offset": 2,
+            "tagging_count_minimum": 5000,
+            "min_year": 0,
+            "max_year": 9999,
+        },
+        ctx=ctx,
+    )
+
+
+def test_get_books_by_content_warning_invokes_query(mock_client, books_server):
+    ctx = DummyContext()
+    invoke_tool(
+        books_server.get_books_by_content_warning,
+        ["violence"],
+        10,
+        3,
+        1,
+        1000,
+        0,
+        2024,
+        ctx,
+    )
+    mock_client.query.assert_awaited_once_with(
+        BOOKS_BY_CONTENT_WARNING_QUERY,
+        variables={
+            "content_warnings": ["violence"],
+            "rating_minimum": 10,
+            "limit": 3,
+            "offset": 1,
+            "tagging_count_minimum": 1000,
+            "min_year": 0,
+            "max_year": 2024,
+        },
+        ctx=ctx,
+    )
+
+
+def test_get_books_by_pace_invokes_query(mock_client, books_server):
+    ctx = DummyContext()
+    invoke_tool(books_server.get_books_by_pace, ["fast"], 5, 4, 2, 750, 1990, 2020, ctx)
+    mock_client.query.assert_awaited_once_with(
+        BOOKS_BY_PACE_QUERY,
+        variables={
+            "paces": ["fast"],
+            "rating_minimum": 5,
+            "limit": 4,
+            "offset": 2,
+            "tagging_count_minimum": 750,
+            "min_year": 1990,
+            "max_year": 2020,
+        },
+        ctx=ctx,
+    )
+
+
+def test_get_books_by_length_invokes_query(mock_client, books_server):
+    ctx = DummyContext()
+    invoke_tool(
         books_server.get_books_by_length,
         100,
         300,
@@ -339,9 +401,19 @@ def test_get_books_by_length_happy_path(mock_client):
         9999,
         ctx,
     )
-    mock_client.query.assert_awaited_once()
-    assert len(result) == 1
-    assert_matches_book(result[0])
+    mock_client.query.assert_awaited_once_with(
+        BOOKS_BY_LENGTH_QUERY,
+        variables={
+            "min_pages": 100,
+            "max_pages": 300,
+            "rating_minimum": 0,
+            "limit": 2,
+            "offset": 0,
+            "min_year": 0,
+            "max_year": 9999,
+        },
+        ctx=ctx,
+    )
 
 
 def test_get_books_by_length_validates_bounds(mock_client):
