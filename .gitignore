@@ -3,4 +3,5 @@ __pycache__/
 .pytest_cache/
 *.pyc
 node_modules
-improvements_specification.md
+.vscode
+tool_design.md
