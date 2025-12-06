@@ -104,7 +104,18 @@ def books_response() -> dict:
             "books_count": 2,
             "user_books": [
                 {
-                    "book": {"id": 101, "title": "Example Title"},
+                    "book": {
+                        "id": 101,
+                        "title": "Example Title",
+                        "taggings": [
+                            {
+                                "tag": {
+                                    "tag": "Fantasy",
+                                    "tag_category": {"id": 1, "category": "Genre"},
+                                }
+                            }
+                        ],
+                    },
                     "first_read_date": "2023-01-01",
                     "first_started_reading_date": "2022-12-30",
                     "has_review": True,
@@ -112,7 +123,7 @@ def books_response() -> dict:
                     "status_id": 2,
                 },
                 {
-                    "book": {"id": None, "title": "Second Book"},
+                    "book": {"id": None, "title": "Second Book", "taggings": []},
                     "first_read_date": None,
                     "first_started_reading_date": None,
                     "has_review": False,
@@ -237,6 +248,7 @@ def test_parse_user_books_returns_entries(books_response):
     assert user_books.user_books[1].id is None
     assert user_books.user_books[1].title == "Second Book"
     assert user_books.user_books[1].status_id is None
+    assert user_books.user_books[0].taggings[0].tag == "Fantasy"
 
 
 def test_parse_user_books_accepts_wrapped_payload(books_response):

@@ -35,7 +35,7 @@ async def setup():
 
 
 @mcp.resource(
-    name="hardcover/tag-categories",
+        uri="data://hardcover/tag-categories",
     description="Static mapping of tag category IDs used by the search tools.",
 )
 async def tag_categories():
@@ -49,7 +49,7 @@ async def tag_categories():
 
 
 @mcp.resource(
-    name="hardcover/book-statuses",
+        uri="data://hardcover/book-statuses",
     description="User book status identifiers used by user.* tools.",
 )
 async def book_statuses():

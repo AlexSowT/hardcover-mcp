@@ -145,7 +145,7 @@ BOOKS_BY_TAG_QUERY = """
         where: {
           _and: [
             {ratings_count: {_gte: $rating_minimum}},
-            {taggings: {tag: {tag: {_in: $tags}, tag_category: {id: {_eq: 2}}}}},
+            {taggings: {tag: {tag: {_in: $tags}}}},
             {release_year: {_gte: $min_year}},
             {release_year: {_lte: $max_year}}
           ]
